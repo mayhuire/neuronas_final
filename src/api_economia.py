@@ -11,7 +11,7 @@ class APIEconomia:
         """
         Valida que el código del indicador tenga el formato correcto.
         """
-        patron = r'^[A-Z]{2}\.[A-Z]+\.[A-Z]+$'
+        patron = r'^[A-Z]{2}(\.[A-Z]+)+$'
 
         if not re.match(patron, codigo):
             raise ValueError(f"Código de indicador inválido: {codigo}")
