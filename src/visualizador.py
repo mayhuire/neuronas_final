@@ -184,3 +184,142 @@ class VisualizadorEconomico:
         plt.close()
         print(f"Gráfico de barras guardado en: {ruta_salida}")
         return ruta_salida
+
+    def grafico_dispersion(self, indicador_x: str, indicador_y: str, anio: int) -> str:
+        """
+        Genera un gráfico de dispersión para mostrar la correlación entre dos indicadores en un año determinado.
+
+        Args:
+            indicador_x (str): Indicador para el eje X (búsqueda parcial).
+            indicador_y (str): Indicador para el eje Y (búsqueda parcial).
+            anio (int): Año a consultar.
+
+        Returns:
+            str: Ruta del gráfico guardado en disco.
+        """
+        if self.df is None or self.df.empty:
+            raise ValueError("Error: No se han cargado datos. Ejecute primero 'cargar_datos()'.")
+
+        # Filtrar datos de ese año
+        df_anio = self.df[self.df["anio"] == anio]
+        if df_anio.empty:
+            raise ValueError(f"Error: No se encontraron datos para el año {anio}.")
+
+        # Separar datos de indicador X e Y
+        df_x = df_anio[df_anio["indicador"].str.contains(indicador_x, case=False, na=False)].copy()
+        df_y = df_anio[df_anio["indicador"].str.contains(indicador_y, case=False, na=False)].copy()
+
+        if df_x.empty:
+            raise ValueError(f"Error: No se encontraron datos del indicador X '{indicador_x}' para el año {anio}.")
+        if df_y.empty:
+            raise ValueError(f"Error: No se encontraron datos del indicador Y '{indicador_y}' para el año {anio}.")
+
+        # Renombrar columnas para facilitar el cruce (merge)
+        df_x = df_x.rename(columns={"valor": "valor_x", "indicador": "ind_x"})
+        df_y = df_y.rename(columns={"valor": "valor_y", "indicador": "ind_y"})
+
+        # Hacer cruce (merge) por país
+        df_merged = pd.merge(df_x[["pais", "valor_x", "ind_x"]], df_y[["pais", "valor_y", "ind_y"]], on="pais")
+
+        if df_merged.empty:
+            raise ValueError(f"Error: No fue posible relacionar los indicadores para el año {anio} (ningún país tiene ambos datos).")
+
+        nombre_x_real = df_merged["ind_x"].iloc[0]
+        nombre_y_real = df_merged["ind_y"].iloc[0]
+
+        plt.figure(figsize=(10, 7))
+        sns.set_theme(style="whitegrid")
+
+        # Graficar puntos dispersos
+        sns.scatterplot(
+            data=df_merged,
+            x="valor_x",
+            y="valor_y",
+            s=120,
+            color="#e25f38",
+            edgecolor="black",
+            linewidth=1,
+            alpha=0.85
+        )
+
+        # Añadir etiquetas con nombres de los países a los puntos
+        for i in range(df_merged.shape[0]):
+            plt.text(
+                df_merged["valor_x"].iloc[i] + (df_merged["valor_x"].max() - df_merged["valor_x"].min()) * 0.015,
+                df_merged["valor_y"].iloc[i],
+                df_merged["pais"].iloc[i],
+                fontsize=9,
+                verticalalignment="center",
+                alpha=0.8
+            )
+
+        plt.title(f"Relación entre Indicadores ({anio})\n{nombre_x_real} vs\n{nombre_y_real}", fontsize=13, fontweight="bold", pad=15)
+        plt.xlabel(nombre_x_real, fontsize=11)
+        plt.ylabel(nombre_y_real, fontsize=11)
+
+        plt.grid(True, linestyle="--", alpha=0.6)
+        plt.tight_layout()
+
+        # Nombre de archivo seguro
+        nombre_archivo = f"dispersion_{indicador_x.lower().replace(' ', '_')}_vs_{indicador_y.lower().replace(' ', '_')}_{anio}.png"
+        nombre_archivo = "".join([c for c in nombre_archivo if c.isalnum() or c in ["_", ".", "-"]])
+        ruta_salida = os.path.join(self.carpeta_salida, nombre_archivo)
+
+        plt.savefig(ruta_salida, dpi=300)
+        plt.close()
+        print(f"Gráfico de dispersión guardado en: {ruta_salida}")
+        return ruta_salida
+
+    def grafico_pastel(self, anio: int) -> str:
+        """
+        Genera y guarda un gráfico de pastel con la distribución porcentual
+        de países según su nivel/categoría de inflación para un año específico.
+
+        Returns:
+            str: Ruta del gráfico guardado en disco, o cadena vacía si no aplica.
+        """
+        if self.df is None or self.df.empty:
+            raise ValueError("Error: No se han cargado datos. Ejecute primero 'cargar_datos()'.")
+
+        # Verificar si existe la columna de categoría de inflación
+        if "categoria_inflacion" not in self.df.columns:
+            print("Gráfico de pastel: Columna 'categoria_inflacion' no encontrada. Se omite la generación.")
+            return ""
+
+        # Filtrar por año y remover valores nulos
+        df_filtrado = self.df[(self.df["anio"] == anio) & (self.df["categoria_inflacion"].notna())]
+
+        if df_filtrado.empty:
+            print(f"Gráfico de pastel: No hay datos de 'categoria_inflacion' para el año {anio}. Se omite.")
+            return ""
+
+        # Contar ocurrencias por categoría
+        distribucion = df_filtrado["categoria_inflacion"].value_counts()
+
+        plt.figure(figsize=(8, 8))
+
+        # Colores consistentes con la categorización
+        colores_dict = {"Baja": "#69b3a2", "Moderada": "#ffcc5c", "Alta": "#ff6f69"}
+        colores_lista = [colores_dict.get(cat, "#cccccc") for cat in distribucion.index]
+
+        plt.pie(
+            distribucion,
+            labels=distribucion.index,
+            autopct="%1.1f%%",
+            startangle=140,
+            colors=colores_lista,
+            shadow=True,
+            textprops={"fontsize": 11, "fontweight": "bold"},
+            wedgeprops={"edgecolor": "black", "linewidth": 0.8, "antialiased": True}
+        )
+
+        plt.title(f"Distribución de Niveles de Inflación\nAño: {anio}", fontsize=13, fontweight="bold", pad=15)
+        plt.tight_layout()
+
+        nombre_archivo = f"pastel_inflacion_{anio}.png"
+        ruta_salida = os.path.join(self.carpeta_salida, nombre_archivo)
+
+        plt.savefig(ruta_salida, dpi=300)
+        plt.close()
+        print(f"Gráfico de pastel de inflación guardado en: {ruta_salida}")
+        return ruta_salida
