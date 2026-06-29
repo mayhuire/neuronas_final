@@ -106,3 +106,81 @@ class VisualizadorEconomico:
         plt.savefig(ruta_salida, dpi=300)
         plt.close()
         return ruta_salida
+
+    def grafico_barras(self, indicador: str, anio: int, top_n: int = None) -> str:
+        """
+        Genera y guarda un gráfico de barras comparativo entre países para un indicador y año específicos.
+
+        Args:
+            indicador (str): Nombre del indicador (búsqueda parcial, insensible a mayúsculas).
+            anio (int): Año del indicador para la comparación.
+            top_n (int, opcional): Si se define, limita a los top N países con mayores valores.
+
+        Returns:
+            str: Ruta del gráfico guardado en disco.
+        """
+        if self.df is None or self.df.empty:
+            raise ValueError("Error: No se han cargado datos. Ejecute primero 'cargar_datos()'.")
+
+        # Filtrar por indicador y año
+        df_filtrado = self.df[
+            (self.df["indicador"].str.contains(indicador, case=False, na=False)) &
+            (self.df["anio"] == anio)
+        ]
+
+        # Validación: Filtro sin datos
+        if df_filtrado.empty:
+            raise ValueError(f"Error: No se encontraron datos para el indicador '{indicador}' en el año {anio}.")
+
+        # Agrupar y ordenar datos
+        df_agrupado = df_filtrado.groupby("pais")["valor"].mean().reset_index()
+        df_agrupado = df_agrupado.sort_values("valor", ascending=False)
+
+        if top_n is not None:
+            df_agrupado = df_agrupado.head(top_n)
+
+        nombre_indicador_real = df_filtrado["indicador"].iloc[0]
+
+        plt.figure(figsize=(12, 6))
+        sns.set_theme(style="whitegrid")
+
+        # Paleta de colores degradada
+        colores = sns.color_palette("mako", len(df_agrupado))
+
+        bars = plt.bar(
+            df_agrupado["pais"],
+            df_agrupado["valor"],
+            color=colores,
+            edgecolor="gray",
+            linewidth=0.7
+        )
+
+        plt.title(f"Comparativa por País: {nombre_indicador_real}\nAño: {anio}", fontsize=13, fontweight="bold", pad=15)
+        plt.xlabel("País", fontsize=11)
+        plt.ylabel("Valor", fontsize=11)
+        plt.xticks(rotation=45, ha="right")
+
+        # Añadir etiquetas de texto sobre las barras para mayor claridad
+        for bar in bars:
+            altura = bar.get_height()
+            plt.annotate(
+                f"{altura:.2f}",
+                xy=(bar.get_x() + bar.get_width() / 2, altura),
+                xytext=(0, 3),  # Desplazamiento vertical en puntos
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=9
+            )
+
+        plt.grid(True, axis="y", linestyle="--", alpha=0.6)
+        plt.tight_layout()
+
+        nombre_archivo = f"barras_{indicador.lower().replace(' ', '_')}_{anio}.png"
+        nombre_archivo = "".join([c for c in nombre_archivo if c.isalnum() or c in ["_", ".", "-"]])
+        ruta_salida = os.path.join(self.carpeta_salida, nombre_archivo)
+
+        plt.savefig(ruta_salida, dpi=300)
+        plt.close()
+        print(f"Gráfico de barras guardado en: {ruta_salida}")
+        return ruta_salida
