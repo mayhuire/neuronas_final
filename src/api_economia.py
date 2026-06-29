@@ -44,7 +44,7 @@ class APIEconomia:
                 lista_datos.append({
                     "pais": dato["country"]["value"],
                     "indicador": dato["indicator"]["value"],
-                    "anio": dato["date"],
+                    "fecha_original": dato["date"],
                     "valor": dato["value"]
                 })
 
